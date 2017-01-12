@@ -1,0 +1,17 @@
+version: '2.0'
+services:
+  background-jobs:
+    build: .
+    command: /bin/bash
+    volumes:
+      - .:/usr/src/app
+      - background-jobs-bundle:/bundle
+    links:
+      - rabbitmq:amqp
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - 15672:15672
+
+volumes:
+  background-jobs-bundle: {}
