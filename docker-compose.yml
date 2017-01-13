@@ -2,16 +2,19 @@ version: '2.0'
 services:
   background-jobs:
     build: .
-    command: /bin/bash
+    command: bin/runner
     volumes:
       - .:/usr/src/app
       - background-jobs-bundle:/bundle
     links:
       - rabbitmq:amqp
+    env_file:
+      - .env
   rabbitmq:
     image: rabbitmq:3-management
+    env_file:
+      - .env.rabbit
     ports:
       - 15672:15672
-
 volumes:
   background-jobs-bundle: {}

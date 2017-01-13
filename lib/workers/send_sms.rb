@@ -2,31 +2,36 @@
 # encoding: utf-8
 
 require 'sneakers'
+require 'twilio-ruby'
+require 'byebug'
 
-class Workers::SendSmsWorker
+class SendSmsWorker
   include Sneakers::Worker
 
-  from_queue 'tize.sms',
+  from_queue ENV['SMS_QUEUE'],
              exchange_options: { type: 'direct', durable: false, auto_delete: true },
              queue_options: { durable: false },
-             routing_key: [''],
-             ack: true,
-             # :threads: 10,
              prefetch: 1,
-             timeout_job_after: 1,
-             exchange: 'search_request'
-             # :heartbeat: 1
-             # :amqp_heartbeat: 1
+             ack: true,
+             timeout_job_after: 30,
+             exchange: 'sms_send'
 
-  # def work(msg)
-  #   puts msg
-  #   publish "cleaned up", :to_queue => "foobar"
-  #   ack!
-  # end
+  def work_with_params(payload, delivery_info, properties)
 
-  def work_with_params(delivery_info, properties, payload)
-    puts delivery_info, properties, payload
-    ack!
-  end
+    payload = JSON.parse(payload) if properties[:content_type]  == 'application/json'
+    phone_number  = payload['to']
+    message   = payload['message']
 
+    logger.info("receive number #{phone_number}")
+    logger.info("sending message #{message}")
+
+    # set up a client to talk to the Twilio REST API
+    @client = Twilio::REST::Client.new
+    @client.messages.create(
+      from: ENV['TWILIO_SMS_SENDER'],
+      to: phone_number,
+      body: message
+    )
+   ack!
+ end
 end

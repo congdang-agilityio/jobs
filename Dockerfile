@@ -32,4 +32,4 @@ RUN bundle install
 
 ADD . $APP_HOME
 
-CMD bundle exec rake sneakers:run
+CMD ruby bin/runner
