@@ -3,7 +3,6 @@
 
 require 'sneakers'
 require 'twilio-ruby'
-require 'byebug'
 
 class SendSmsWorker
   include Sneakers::Worker

@@ -1,3 +1,5 @@
+require 'twilio-ruby'
+
 # alternatively, you can preconfigure the client like so
 Twilio.configure do |config|
   config.account_sid  = ENV['TWILIO_ACCOUNT_SID']

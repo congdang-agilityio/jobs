@@ -1,22 +1,13 @@
 #!/usr/bin/env ruby
-$:.unshift( File.expand_path('../lib/workers', File.dirname(__FILE__)) )
-$:.unshift( File.expand_path('../initializers', File.dirname(__FILE__)) )
-
 require 'bundler/setup'
 require 'sneakers'
 require 'sneakers/runner'
-require "send_sms"
-require "twilio"
+
+Dir.glob(File.join(File.expand_path('../initializers', File.dirname(__FILE__)), '**', '*.rb'), &method(:require))
+Dir.glob(File.join(File.expand_path('../workers', File.dirname(__FILE__)), '**', '*.rb'), &method(:require))
 
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
-
-Sneakers.configure(
-  amqp: ENV['RABBITMQ_URL'],
-  daemonize: false,
-  log: STDOUT)
-
-Sneakers.logger.level = Logger::INFO
 
 r = Sneakers::Runner.new([ SendSmsWorker ])
 r.run
