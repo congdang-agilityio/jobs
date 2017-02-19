@@ -1,14 +1,16 @@
 #!/usr/bin/env ruby
 require 'bundler/setup'
-
+require 'active_support'
+require 'active_support/core_ext'
 require 'dotenv'
 Dotenv.load
 
 Dir.glob(File.join(File.expand_path('../initializers', File.dirname(__FILE__)), '**', '*.rb'), &method(:require))
 Dir.glob(File.join(File.expand_path('../workers', File.dirname(__FILE__)), '**', '*.rb'), &method(:require))
+Dir.glob(File.join(File.expand_path('../lib', File.dirname(__FILE__)), '**', '*.rb'), &method(:require))
 
 require 'sneakers/runner'
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
-r = Sneakers::Runner.new([ SendSmsWorker ])
+r = Sneakers::Runner.new([ SendSmsWorker, RideSchedulerWorker ])
 r.run
