@@ -11,10 +11,19 @@ services:
     env_file:
       - .env
   rabbitmq:
-    image: rabbitmq:3-management
-    env_file:
-      - .env.rabbit
+    build:
+      context: .
+      dockerfile: Dockerfile.rabbitmq
     ports:
       - 15672:15672
+  ridesharing-lyft:
+    build:
+      context: ../ridesharing-lyft
+    volumes:
+      - ../ridesharing-lyft:/usr/src/app
+      - ridesharing-lyft-bundle:/bundle
+    links:
+      - rabbitmq:amqp
 volumes:
   background-jobs-bundle: {}
+  ridesharing-lyft-bundle: {}
