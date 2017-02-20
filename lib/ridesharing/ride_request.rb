@@ -1,7 +1,7 @@
 require 'concurrent'
 
 module Ridesharing
-  class BunnyRpc
+  class RideRequest
     attr_accessor :responses
     attr_accessor :errors
     attr_reader :response_queue

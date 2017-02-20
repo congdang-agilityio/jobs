@@ -71,6 +71,7 @@ class RideSchedulerWorker
   end
 
   def ride_params(params)
+    params[:webhook_push] = true
     params.slice(
       :vendor,
       :pickup_latitude,
@@ -79,7 +80,8 @@ class RideSchedulerWorker
       :destination_longitude,
       :car_type,
       :ride_request_id,
-      :access_token)
+      :access_token,
+      :webhook_push)
   end
 
   def valid_scheduled_time?(scheduled_time)
