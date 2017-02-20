@@ -88,11 +88,6 @@ class RideSchedulerWorker
     Time.now.utc + 1.minutes <= scheduled_time
   end
 
-  def valid_request_time?(r, scheduled_time)
-    time = Time.now.utc + r[:pickup_eta].minutes
-    time.between? scheduled_time - 2.minutes, scheduled_time + 2.minutes
-  end
-
   def sort_by_cheapest(x, y)
     a = x[:min_price_estimate] || x[:price_base]
     b = y[:min_price_estimate] || y[:price_base]
@@ -125,7 +120,7 @@ class RideSchedulerWorker
       .reject {|r| r[:pickup_eta].nil? || r[:pickup_eta] == 0 }
       .select {|r|
         time = Time.now.utc + r[:pickup_eta].minutes
-        valid = time.between? scheduled_time - 1.minutes, scheduled_time + 1.minutes
+        valid = time.between? scheduled_time - 2.minutes, scheduled_time + 2.minutes
         logger.info("ESTIMATION: [#{valid}] pickup_eta: #{time}, scheduled_time: #{scheduled_time}")
         valid
       }
