@@ -76,6 +76,7 @@ class RideSchedulerWorker
       :vendor,
       :pickup_latitude,
       :pickup_longitude,
+      :pickup_eta,
       :destination_latitude,
       :destination_longitude,
       :car_type,
