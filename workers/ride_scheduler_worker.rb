@@ -126,7 +126,7 @@ class RideSchedulerWorker
       .reject {|r| r[:pickup_eta].nil? || r[:pickup_eta] == 0 }
       .select {|r|
         time = Time.now.utc + r[:pickup_eta].minutes
-        valid = time.between? scheduled_time - 2.minutes, scheduled_time + 2.minutes
+        valid = time.between? scheduled_time, scheduled_time + 15.minutes
         logger.info("ESTIMATION: [#{valid}] pickup_eta: #{time}, scheduled_time: #{scheduled_time}")
         valid
       }
