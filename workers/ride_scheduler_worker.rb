@@ -22,14 +22,15 @@ class RideSchedulerWorker
     scheduled_time = params[:scheduled_time].to_time.utc
     if valid_scheduled_time? scheduled_time
       estimate_request = Ridesharing::EstimateRequest.new ENV['RIDESHARING_ESTIMATE_EXCHANGE']
-      estimate_responses, estimate_errors = estimate_request.call estimate_params(params)
+      sanitized_estimate_params = estimate_params(params)
+      estimate_responses, estimate_errors = estimate_request.call sanitized_estimate_params
       logger.info("Estimated Responses: \n\tRESPONSES: #{estimate_responses}\n\tERRORS: #{estimate_errors}")
 
       if estimate_responses.present?
         sort_by = params[:sort_by] || 'cheapest'
-
+        car_types = Array(params[:car_types]) | Array(sanitized_estimate_params[:car_types])
         # filtering estimate results
-        estimated = match_estimated_responses estimate_responses, scheduled_time, sort_by
+        estimated = match_estimated_responses estimate_responses, scheduled_time, sort_by, car_types
 
         # Make a ride request
         if estimated.present?
@@ -38,6 +39,7 @@ class RideSchedulerWorker
           logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
           if ride_response.present?
             # TODO: push to webhook
+
             logger.info("Make a ride has been completed")
           else
             logger.warn "Not able to make a ride"
@@ -62,12 +64,14 @@ class RideSchedulerWorker
   private
 
   def estimate_params(params)
+    params[:car_types] = [] if params[:car_types].nil? || params[:car_types].size > 1
     params.slice(
       :pickup_latitude,
       :pickup_longitude,
       :destination_latitude,
       :destination_longitude,
-      :car_types)
+      :car_types,
+      :passengers)
   end
 
   def ride_params(params)
@@ -121,9 +125,10 @@ class RideSchedulerWorker
     })
   end
 
-  def match_estimated_responses(responses, scheduled_time, sort_by)
+  def match_estimated_responses(responses, scheduled_time, sort_by, car_types)
     responses
       .reject {|r| r[:pickup_eta].nil? || r[:pickup_eta] == 0 }
+      .select {|r| car_types.empty? || car_types.include?(r[:car_type]) }
       .select {|r|
         time = Time.now.utc + r[:pickup_eta].minutes
         valid = time.between? scheduled_time, scheduled_time + 15.minutes
