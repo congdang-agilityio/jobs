@@ -8,6 +8,7 @@ gem 'dotenv'
 gem 'twilio-ruby', '~> 4.11.1'
 gem 'concurrent-ruby', require: 'concurrent'
 gem 'activesupport'
+gem 'aws-sdk', '~> 2'
 
 group :test do
   gem 'rspec', '~> 3.0'
