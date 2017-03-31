@@ -1,5 +1,5 @@
 require 'aws-sdk'
-class PustNotificationWorker
+class PushNotificationWorker
   include Sneakers::Worker
 
   from_queue ENV['PUSH_NOTICATION_QUEUE'],
