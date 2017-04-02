@@ -1,4 +1,6 @@
 require 'json'
+require 'securerandom'
+require 'rest-client'
 
 class RideSchedulerWorker
   include Sneakers::Worker
@@ -18,6 +20,13 @@ class RideSchedulerWorker
   def work_with_params(payload, delivery_info, properties)
     params = JSON.parse(payload, symbolize_names: true)
     logger.info "Start estimating for Scheduled Ride request: #{params}"
+
+    if params[:status] == 'scheduled'
+      params[:status] = 'requested'
+      logger.info "Update ride status to #{params[:status]}"
+
+      webhook_push params.slice(:id, :status)
+    end
 
     scheduled_time = params[:scheduled_time].to_time.utc
     if valid_scheduled_time? scheduled_time
@@ -157,5 +166,16 @@ class RideSchedulerWorker
         requeue(params)
       end
     end
+  end
+
+  def webhook_push(params)
+    url = "#{ENV['SCHEDULER_API_URL']}/ride/webhooks/#{params[:id]}/status"
+
+    RestClient::Request.execute(
+      url: url,
+      method: :put,
+      headers: { Authorization: "Bearer #{ENV['SCHEDULER_SERVER_TOKEN']}" },
+      verify_ssl: false,
+      payload: params) rescue nil
   end
 end

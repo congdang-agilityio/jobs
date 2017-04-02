@@ -44,7 +44,7 @@ module Ridesharing
         content_type: 'application/json'
       )
 
-      @latch.wait 10
+      @latch.wait 15
 
       @channel.close
       @conn.close
