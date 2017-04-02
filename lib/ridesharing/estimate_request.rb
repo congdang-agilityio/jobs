@@ -8,7 +8,7 @@ module Ridesharing
 
     attr_reader :latch
 
-    def initialize(exchange_name)
+    def initialize(exchange_name, vendors)
       @conn = Bunny.new
       @conn.start
       @channel = @conn.create_channel
@@ -16,9 +16,10 @@ module Ridesharing
       @response_queue = @channel.queue("", exclusive: true, durable: false, auto_delete: true)
       @responses = []
       @errors = []
+      @vendors = vendors
 
       # TODO: get from rabbitmq
-      provider_count = 1
+      provider_count = @vendors.size
       # enable countdownlatch
       @latch = Concurrent::CountDownLatch.new(provider_count)
       Thread.new do
@@ -38,10 +39,13 @@ module Ridesharing
     end
 
     def call(params)
+      routing_key = @vendors.size == 1 && @vendors.first || ''
+
       @exchange.publish(params.to_json,
         correlation_id: request_id,
         reply_to: @response_queue.name,
-        content_type: 'application/json'
+        content_type: 'application/json',
+        routing_key: routing_key
       )
 
       @latch.wait 15
