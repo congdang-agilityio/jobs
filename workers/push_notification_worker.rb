@@ -8,7 +8,7 @@ class PushNotificationWorker
              prefetch: 1,
              ack: true,
              timeout_job_after: 30,
-             exchange: 'sms_send'
+             exchange: 'push_notification'
 
   def work_with_params(payload, delivery_info, properties)
 
@@ -25,6 +25,6 @@ class PushNotificationWorker
               message_structure: 'json')
 
     logger.info("Sending result #{result.inspect}")
-   ack!
- end
+    ack!
+  end
 end
