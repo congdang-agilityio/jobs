@@ -1,4 +1,6 @@
 require 'json'
+require 'securerandom'
+require 'rest-client'
 
 class RideSchedulerWorker
   include Sneakers::Worker
@@ -17,11 +19,27 @@ class RideSchedulerWorker
 
   def work_with_params(payload, delivery_info, properties)
     params = JSON.parse(payload, symbolize_names: true)
-    logger.info "Start estimating for Scheduled Ride request: #{params}"
+
+    if params[:status] == 'scheduled'
+      params[:status] = 'requested'
+      logger.info "Update ride status to #{params[:status]}"
+
+      webhook_push params.slice(:id, :status)
+    end
+
+    vendors = user_service_accounts params[:access_token]
+    if vendors.empty?
+      logger.error "There is no linked service account right now. The scheduled ride can not be processed"
+      requeue(params)
+      ack!
+      return
+    end
+
+    logger.info "Start estimating for Scheduled Ride request: #{params} with vendors: #{vendors}"
 
     scheduled_time = params[:scheduled_time].to_time.utc
     if valid_scheduled_time? scheduled_time
-      estimate_request = Ridesharing::EstimateRequest.new ENV['RIDESHARING_ESTIMATE_EXCHANGE']
+      estimate_request = Ridesharing::EstimateRequest.new ENV['RIDESHARING_ESTIMATE_EXCHANGE'], vendors
       sanitized_estimate_params = estimate_params(params)
       estimate_responses, estimate_errors = estimate_request.call sanitized_estimate_params
       logger.info("Estimated Responses: \n\tRESPONSES: #{estimate_responses}\n\tERRORS: #{estimate_errors}")
@@ -34,17 +52,7 @@ class RideSchedulerWorker
 
         # Make a ride request
         if estimated.present?
-          ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
-          ride_response, ride_error = ride_request.call ride_params(params.merge(estimated))
-          logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
-          if ride_response.present?
-            # TODO: push to webhook
-
-            logger.info("Make a ride has been completed")
-          else
-            logger.warn "Not able to make a ride"
-            requeue(params)
-          end
+          make_ride ride_params(params.merge(estimated))
         else
           logger.warn "No ride matchs the criterions"
           requeue(params)
@@ -90,6 +98,8 @@ class RideSchedulerWorker
       :price_base,
       :min_time_estimate,
       :min_price_estimate,
+      :higher_fare_confirmation,
+      :higher_fare_confirmation_token,
       :access_token,
       :webhook_push)
   end
@@ -131,11 +141,67 @@ class RideSchedulerWorker
       .select {|r| car_types.empty? || car_types.include?(r[:car_type]) }
       .select {|r|
         time = Time.now.utc + r[:pickup_eta].minutes
-        valid = time.between? scheduled_time, scheduled_time + 15.minutes
+        valid = time.between? scheduled_time - 15.minutes, scheduled_time + 15.minutes
         logger.info("ESTIMATION: [#{valid}] pickup_eta: #{time}, scheduled_time: #{scheduled_time}")
         valid
       }
       .sort(&method(:"sort_by_#{sort_by}"))
       .first
+  end
+
+  def make_ride(params)
+    ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
+    ride_response, ride_error = ride_request.call params
+    logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
+    if ride_response.present?
+      # TODO: push to webhook
+
+      logger.info("Make a ride has been completed")
+    else
+      logger.warn "Not able to make a ride"
+      if ride_error[:error_code] == 'surge_pricing_confirmation'
+        logger.warn "Higher Fare confirmation required"
+
+        if params[:higher_fare_confirmation]
+          token = ride_error.slice(:higher_fare_confirmation_token)
+          logger.info "Force making a ride with confirmation token #{token[:higher_fare_confirmation_token]}"
+          make_ride params.merge(token)
+        else
+          # TODO: wait for confirm from user
+          logger.info "Waiting for Higher Fare user confirmation"
+        end
+      else
+        logger.info "Retry to make a ride after 1 minute"
+        requeue(params)
+      end
+    end
+  end
+
+  def webhook_push(params)
+    url = "#{ENV['SCHEDULER_API_URL']}/ride/webhooks/#{params[:id]}/status"
+
+    RestClient::Request.execute(
+      url: url,
+      method: :put,
+      headers: { Authorization: "Bearer #{ENV['SCHEDULER_SERVER_TOKEN']}" },
+      verify_ssl: false,
+      payload: params) rescue nil
+  end
+
+  def user_service_accounts(auth_token)
+    url = "#{ENV['AUTH_API_URL']}/service_accounts"
+
+    response = RestClient::Request.execute(
+      url: url,
+      method: :get,
+      headers: { Authorization: "Bearer #{auth_token}" },
+      verify_ssl: false) rescue nil
+
+    if response
+      json = JSON.parse(response.body, symbolize_names: true)
+      return json.pluck(:provider)
+    end
+
+    []
   end
 end
