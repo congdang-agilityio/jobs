@@ -34,17 +34,7 @@ class RideSchedulerWorker
 
         # Make a ride request
         if estimated.present?
-          ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
-          ride_response, ride_error = ride_request.call ride_params(params.merge(estimated))
-          logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
-          if ride_response.present?
-            # TODO: push to webhook
-
-            logger.info("Make a ride has been completed")
-          else
-            logger.warn "Not able to make a ride"
-            requeue(params)
-          end
+          make_ride ride_params(params.merge(estimated))
         else
           logger.warn "No ride matchs the criterions"
           requeue(params)
@@ -90,6 +80,8 @@ class RideSchedulerWorker
       :price_base,
       :min_time_estimate,
       :min_price_estimate,
+      :higher_fare_confirmation,
+      :higher_fare_confirmation_token,
       :access_token,
       :webhook_push)
   end
@@ -137,5 +129,33 @@ class RideSchedulerWorker
       }
       .sort(&method(:"sort_by_#{sort_by}"))
       .first
+  end
+
+  def make_ride(params)
+    ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
+    ride_response, ride_error = ride_request.call params
+    logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
+    if ride_response.present?
+      # TODO: push to webhook
+
+      logger.info("Make a ride has been completed")
+    else
+      logger.warn "Not able to make a ride"
+      if ride_error[:error_code] == 'surge_pricing_confirmation'
+        logger.warn "Higher Fare confirmation required"
+
+        if params[:higher_fare_confirmation]
+          token = ride_error.slice(:higher_fare_confirmation_token)
+          logger.info "Force making a ride with confirmation token #{token[:higher_fare_confirmation_token]}"
+          make_ride params.merge(token)
+        else
+          # TODO: wait for confirm from user
+          logger.info "Waiting for Higher Fare user confirmation"
+        end
+      else
+        logger.info "Retry to make a ride after 1 minute"
+        requeue(params)
+      end
+    end
   end
 end
