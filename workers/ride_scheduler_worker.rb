@@ -94,6 +94,8 @@ class RideSchedulerWorker
       :destination_longitude,
       :car_type,
       :ride_request_id,
+      :vehicle_type,
+      :payment_method_id,
       :vendor_car_name,
       :car_image_url,
       :price_base,
