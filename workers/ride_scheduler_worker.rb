@@ -53,7 +53,7 @@ class RideSchedulerWorker
 
         # Make a ride request
         if estimated.present?
-          make_ride ride_params(params.merge(estimated), params)
+          make_ride ride_params(params.merge(estimated)), params
         else
           logger.warn "No ride matchs the criterions"
           requeue(params)
