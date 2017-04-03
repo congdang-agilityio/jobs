@@ -174,7 +174,7 @@ class RideSchedulerWorker
         end
       else
         logger.info "Retry to make a ride after 1 minute"
-        requeue(params)
+        requeue(requeue_params)
       end
     end
   end
