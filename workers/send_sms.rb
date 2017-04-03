@@ -5,8 +5,8 @@ class SendSmsWorker
   include Sneakers::Worker
 
   from_queue ENV['SMS_QUEUE'],
-             exchange_options: { type: 'direct', durable: false, auto_delete: true },
-             queue_options: { durable: false },
+             exchange_options: { type: 'direct', durable: true, auto_delete: true },
+             queue_options: { durable: true },
              prefetch: 1,
              ack: true,
              timeout_job_after: 30,
