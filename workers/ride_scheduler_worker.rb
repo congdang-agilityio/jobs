@@ -48,11 +48,12 @@ class RideSchedulerWorker
         sort_by = params[:sort_by] || 'cheapest'
         car_types = Array(params[:car_types]) | Array(sanitized_estimate_params[:car_types])
         # filtering estimate results
+        logger.info "Estimation params #{sort_by}, #{car_types}, #{scheduled_time}"
         estimated = match_estimated_responses estimate_responses, scheduled_time, sort_by, car_types
 
         # Make a ride request
         if estimated.present?
-          make_ride ride_params(params.merge(estimated))
+          make_ride ride_params(params.merge(estimated), params)
         else
           logger.warn "No ride matchs the criterions"
           requeue(params)
@@ -149,7 +150,8 @@ class RideSchedulerWorker
       .first
   end
 
-  def make_ride(params)
+  # TODO: remove requeue_params if it is not neccessary
+  def make_ride(params, requeue_params)
     ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
     ride_response, ride_error = ride_request.call params
     logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
