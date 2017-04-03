@@ -141,7 +141,7 @@ class RideSchedulerWorker
       .select {|r| car_types.empty? || car_types.include?(r[:car_type]) }
       .select {|r|
         time = Time.now.utc + r[:pickup_eta].minutes
-        valid = time.between? scheduled_time - 15.minutes, scheduled_time + 15.minutes
+        valid = time.between? scheduled_time - 1.minutes, scheduled_time + 15.minutes
         logger.info("ESTIMATION: [#{valid}] pickup_eta: #{time}, scheduled_time: #{scheduled_time}")
         valid
       }
