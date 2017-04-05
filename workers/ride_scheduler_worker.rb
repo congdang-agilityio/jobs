@@ -64,6 +64,12 @@ class RideSchedulerWorker
         requeue(params)
       end
     else
+      # move this to a method for easy to maintain
+      payload = params.slice(:id)
+      payload[:status] = 'cancelled'
+      payload[:cancelled_by] = 'scheduler'
+
+      webhook_push payload
       logger.warn "Scheduled Ride at #{scheduled_time} was expired"
     end
 
