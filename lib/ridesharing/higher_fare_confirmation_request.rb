@@ -58,6 +58,7 @@ module Ridesharing
     end
 
     def request_id
+      # TODO: user ENV for this queue name
       @request_id ||= "higher-fare-confirmation-request-#{@id}"
     end
 
