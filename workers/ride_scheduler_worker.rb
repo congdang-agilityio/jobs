@@ -15,7 +15,7 @@ class RideSchedulerWorker
     routing_key: [''],
     prefetch: 1,
     ack: true,
-    timeout_job_after: 30
+    timeout_job_after: 90
 
   def work_with_params(payload, delivery_info, properties)
     params = JSON.parse(payload, symbolize_names: true)
@@ -99,6 +99,7 @@ class RideSchedulerWorker
       :destination_latitude,
       :destination_longitude,
       :car_type,
+      :id, # used to replace `ride_request_id` in the future
       :ride_request_id,
       :vehicle_type,
       :payment_method_id,
@@ -109,6 +110,8 @@ class RideSchedulerWorker
       :min_price_estimate,
       :higher_fare_confirmation,
       :higher_fare_confirmation_token,
+      :user_id,
+      :status,
       :access_token,
       :webhook_push)
   end
@@ -159,7 +162,7 @@ class RideSchedulerWorker
   end
 
   # TODO: remove requeue_params if it is not neccessary
-  def make_ride(params, requeue_params)
+  def make_ride(params, requeue_params = nil)
     ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
     ride_response, ride_error = ride_request.call params
     logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
@@ -171,20 +174,38 @@ class RideSchedulerWorker
       logger.warn "Not able to make a ride"
       if ride_error[:error_code] == 'surge_pricing_confirmation'
         logger.warn "Higher Fare confirmation required"
+        token = ride_error.slice(:higher_fare_confirmation_token)
 
         if params[:higher_fare_confirmation]
-          token = ride_error.slice(:higher_fare_confirmation_token)
           logger.info "Force making a ride with confirmation token #{token[:higher_fare_confirmation_token]}"
           make_ride params.merge(token)
         else
-          # TODO: wait for confirm from user
-          logger.info "Waiting for Higher Fare user confirmation"
+          begin
+            response, * = notify_higher_fare_confirmation params
+            if response && response[:higher_fare_confirmation]
+              logger.info "Higher Fare confirmation: #{response}"
+              make_ride params.merge(token)
+            end
+          rescue ServiceUnavailableError
+            logger.warn "There is no confirmation from user"
+            requeue(requeue_params)
+          end
         end
       else
         logger.info "Retry to make a ride after 1 minute"
         requeue(requeue_params)
       end
     end
+  end
+
+  def notify_higher_fare_confirmation(params)
+    logger.info "Waiting for Higher Fare confirmation from user ..."
+
+    params[:timeout] = 1.minute.to_i
+    params[:expires_at] = Time.now.utc + 1.minute
+
+    confirm = Ridesharing::HigherFareConfirmationRequest.new
+    confirm.call(params)
   end
 
   def webhook_push(params)
