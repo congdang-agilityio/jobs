@@ -135,6 +135,10 @@ class RideSchedulerWorker
   def requeue(params)
     scheduled_time = params[:scheduled_time].to_time.utc
     unless valid_scheduled_time?(scheduled_time)
+      payload = params.slice(:id)
+      payload[:status] = 'cancelled'
+      payload[:cancelled_by] = 'scheduler'
+      webhook_push payload
       logger.info "Stop estimating for Scheduled Ride request: #{params[:ride_request_id]}"
       return
     end
