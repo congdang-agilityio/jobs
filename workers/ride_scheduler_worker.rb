@@ -152,12 +152,13 @@ class RideSchedulerWorker
   end
 
   def match_estimated_responses(responses, scheduled_time, sort_by, car_types)
+    range = ENV['RIDESHARING_VALID_RIDES_WINDOW_MINUTES'] || 15
     responses
       .reject {|r| r[:pickup_eta].nil? || r[:pickup_eta] == 0 }
       .select {|r| car_types.empty? || car_types.include?(r[:car_type]) }
       .select {|r|
         time = Time.now.utc + r[:pickup_eta].minutes
-        valid = time.between? scheduled_time - 5.minutes, scheduled_time + 5.minutes
+        valid = time.between? scheduled_time - 1.minutes, scheduled_time + range.to_i.minutes
         logger.info("ESTIMATION: [#{valid}] pickup_eta: #{time}, scheduled_time: #{scheduled_time}")
         valid
       }
