@@ -45,6 +45,12 @@ class RideSchedulerWorker
       logger.info("Estimated Responses: \n\tRESPONSES: #{estimate_responses}\n\tERRORS: #{estimate_errors}")
 
       if estimate_responses.present?
+        # notify to user if any higher is active
+        if !params[:higher_fare_confirmation] && !params[:higher_fare_confirmation_notified] && higher_fare_applied?(estimate_responses)
+          params[:higher_fare_confirmation_notified] = true
+          notify_higher_fare_confirmation params
+        end
+
         sort_by = params[:sort_by] || 'cheapest'
         car_types = Array(params[:car_types]) | Array(sanitized_estimate_params[:car_types])
         # filtering estimate results
@@ -117,7 +123,12 @@ class RideSchedulerWorker
   end
 
   def valid_scheduled_time?(scheduled_time)
-    Time.now.utc <= scheduled_time
+    # must before 5 mins of scheduled_time
+    range = ENV['RIDESHARING_VALID_RIDES_WINDOW_MINUTES'] || 15
+    range = range.to_i - 5
+    range = 0 if range < 0
+
+    Time.now.utc <= scheduled_time + range.minutes
   end
 
   def sort_by_cheapest(x, y)
@@ -166,6 +177,10 @@ class RideSchedulerWorker
       .first
   end
 
+  def higher_fare_applied?(responses)
+    responses.any? {|r| r[:higher_fare_applied] }
+  end
+
   # TODO: remove requeue_params if it is not neccessary
   def make_ride(params, requeue_params = nil)
     ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
@@ -181,20 +196,11 @@ class RideSchedulerWorker
         logger.warn "Higher Fare confirmation required"
         token = ride_error.slice(:higher_fare_confirmation_token)
 
-        if params[:higher_fare_confirmation]
+        if params[:higher_fare_confirmation] || higher_fare_confirmed?(params)
           logger.info "Force making a ride with confirmation token #{token[:higher_fare_confirmation_token]}"
           make_ride params.merge(token)
         else
-          begin
-            response, * = notify_higher_fare_confirmation params
-            if response && response[:higher_fare_confirmation]
-              logger.info "Higher Fare confirmation: #{response}"
-              make_ride params.merge(token)
-            end
-          rescue ServiceUnavailableError
-            logger.warn "There is no confirmation from user"
-            requeue(requeue_params)
-          end
+          requeue(requeue_params)
         end
       else
         logger.info "Retry to make a ride after 1 minute"
@@ -206,11 +212,8 @@ class RideSchedulerWorker
   def notify_higher_fare_confirmation(params)
     logger.info "Waiting for Higher Fare confirmation from user ..."
 
-    params[:timeout] = 1.minute.to_i
-    params[:expires_at] = Time.now.utc + 1.minute
-
-    confirm = Ridesharing::HigherFareConfirmationRequest.new
-    confirm.call(params)
+    message = higher_fare_confirmation_message params
+    send_push_notification message
   end
 
   def webhook_push(params)
@@ -222,6 +225,43 @@ class RideSchedulerWorker
       headers: { Authorization: "Bearer #{ENV['SCHEDULER_SERVER_TOKEN']}" },
       verify_ssl: false,
       payload: params) rescue nil
+  end
+
+  def higher_fare_confirmation_message(params)
+    metadata = {
+      service_type: 'ridesharing',
+      event_type: 'higher_fare_confirmation',
+      status: params[:status],
+      id: params[:id]
+    }
+    message = params[:vendor] == 'uber' && 'We found you a ride, but surge pricing is in effect. Tap to confirm.' ||
+      'We found you a ride, but Prime Time pricing is in effect. Tap to confirm.'
+
+    {
+      user_id: params[:user_id],
+      message: message,
+      metadata: metadata
+    }
+  end
+
+  def higher_fare_confirmed?(params)
+    logger.info "Checking for Higher Fare confirmation ..."
+    request = Ridesharing::HigherFareConfirmationRequest.new
+    response = request.call params.slice(:id)
+    logger.info "Higher Fare confirmation response: #{response}"
+    response
+  end
+
+  def send_push_notification(params)
+    url = "#{ENV['AUTH_API_URL']}/notifications"
+    server_token = ENV['AUTH_SERVER_TOKEN']
+
+    RestClient::Request.execute(
+      url: url,
+      method: :post,
+      headers: { Authorization: "Bearer #{server_token}", "Content-Type": "application/json"},
+      verify_ssl: false,
+      payload: params.to_json) rescue nil
   end
 
   def user_service_accounts(auth_token)
