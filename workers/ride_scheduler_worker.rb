@@ -15,7 +15,7 @@ class RideSchedulerWorker
     routing_key: [''],
     prefetch: 1,
     ack: true,
-    timeout_job_after: 90
+    timeout_job_after: 120
 
   def work_with_params(payload, delivery_info, properties)
     params = JSON.parse(payload, symbolize_names: true)
@@ -200,6 +200,10 @@ class RideSchedulerWorker
           logger.info "Force making a ride with confirmation token #{token[:higher_fare_confirmation_token]}"
           make_ride params.merge(token)
         else
+          if !requeue_params[:higher_fare_confirmation_notified]
+            requeue_params[:higher_fare_confirmation_notified] = true
+            notify_higher_fare_confirmation requeue_params
+          end
           requeue(requeue_params)
         end
       else
