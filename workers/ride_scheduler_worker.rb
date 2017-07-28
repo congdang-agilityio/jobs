@@ -28,6 +28,11 @@ class RideSchedulerWorker
     end
 
     vendors = user_service_accounts params[:access_token]
+    vendors.push('flitways') if params[:excluded_flitways].nil?
+
+    logger.info "VENDORS @@@ #{vendors}"
+
+    # vendors = ['flitways']
     if vendors.empty?
       logger.error "There is no linked service account right now. The scheduled ride can not be processed"
       requeue(params)
@@ -59,7 +64,15 @@ class RideSchedulerWorker
 
         # Make a ride request
         if estimated.present?
-          make_ride ride_params(params.merge(estimated)), params
+
+          ride_request_params = ride_params(params.merge!(estimated))
+
+          ride_request_params.merge!(estimated.slice(:time_duration, :distance, :total_charges)) if ride_request_params[:vendor] == 'flitways'
+          ride_request_params.merge!(params.slice(:pickup_address, :destination_address)).merge!({passengers: 1}) if ride_request_params[:vendor] == 'flitways'
+
+          logger.info "ride_request_params @@@@@ #{ride_request_params}"
+
+          make_ride(ride_request_params, params)
         else
           logger.warn "No ride matchs the criterions"
           requeue(params)
@@ -91,6 +104,8 @@ class RideSchedulerWorker
       :pickup_longitude,
       :destination_latitude,
       :destination_longitude,
+      :pickup_address,
+      :destination_address,
       :car_types,
       :passengers)
   end
@@ -183,6 +198,9 @@ class RideSchedulerWorker
 
   # TODO: remove requeue_params if it is not neccessary
   def make_ride(params, requeue_params = nil)
+
+    logger.info("START Request")
+
     ride_request = Ridesharing::RideRequest.new ENV['RIDESHARING_RIDE_EXCHANGE']
     ride_response, ride_error = ride_request.call params
     logger.info("Ride Response: \n\tRESPONSE: #{ride_response}\n\tERROR: #{ride_error}")
@@ -192,7 +210,10 @@ class RideSchedulerWorker
       logger.info("Make a ride has been completed")
     else
       logger.warn "Not able to make a ride"
-      if ride_error[:error_code] == 'surge_pricing_confirmation'
+
+      if ride_error[:vendor] == 'flitways'
+        requeue(requeue_params.merge!({excluded_flitways: true}))
+      elsif ride_error[:error_code] == 'surge_pricing_confirmation'
         logger.warn "Higher Fare confirmation required"
         token = ride_error.slice(:higher_fare_confirmation_token)
 
