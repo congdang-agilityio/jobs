@@ -82,6 +82,8 @@ class RideSchedulerWorker
         logger.warn "No estimations returned from vendors"
         requeue(params)
       end
+    elsif ride_cancel_confirmed?(params)
+      logger.info "Scheduled Ride with id #{params[:id]} at #{scheduled_time} was cancelled"
     else
       # move this to a method for easy to maintain
       payload = params.slice(:id)
@@ -274,6 +276,14 @@ class RideSchedulerWorker
     request = Ridesharing::HigherFareConfirmationRequest.new
     response = request.call params.slice(:id)
     logger.info "Higher Fare confirmation response: #{response}"
+    response
+  end
+
+  def ride_cancel_confirmed?(params)
+    logger.info "Checking for Ride Cancel confirmation ..."
+    request = Ridesharing::RideCancelConfirmationRequest.new
+    response = request.call params.slice(:id)
+    logger.info "Ride Cancel confirmation response: #{response}"
     response
   end
 
