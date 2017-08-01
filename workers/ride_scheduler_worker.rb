@@ -35,7 +35,14 @@ class RideSchedulerWorker
     # vendors = ['flitways']
     if vendors.empty?
       logger.error "There is no linked service account right now. The scheduled ride can not be processed"
-      requeue(params)
+      # requeue(params)
+      ack!
+      return
+    end
+
+    # listen the cancel confirmation
+    if ride_cancel_confirmed?(params)
+      logger.info "Scheduled Ride with id #{params[:id]} at #{scheduled_time} was cancelled"
       ack!
       return
     end
@@ -82,8 +89,6 @@ class RideSchedulerWorker
         logger.warn "No estimations returned from vendors"
         requeue(params)
       end
-    elsif ride_cancel_confirmed?(params)
-      logger.info "Scheduled Ride with id #{params[:id]} at #{scheduled_time} was cancelled"
     else
       # move this to a method for easy to maintain
       payload = params.slice(:id)
