@@ -32,4 +32,4 @@ RUN bundle install
 
 ADD . $APP_HOME
 
-CMD ruby bin/runner
+CMD bundle exec ruby bin/runner
