@@ -28,7 +28,7 @@ class RideSchedulerWorker
     end
 
     vendors = user_service_accounts params[:access_token]
-    vendors.push('flitways') if params[:excluded_flitways].nil?
+    vendors.push('flitways') if params[:included_flitways].present? &&  params[:included_flitways] == true
 
     logger.info "VENDORS @@@ #{vendors}"
 
@@ -219,7 +219,7 @@ class RideSchedulerWorker
       logger.warn "Not able to make a ride"
 
       if ride_error[:vendor] == 'flitways'
-        requeue(requeue_params.merge!({excluded_flitways: true}))
+        requeue(requeue_params.merge!({included_flitways: false}))
       elsif ride_error[:error_code] == 'surge_pricing_confirmation'
         logger.warn "Higher Fare confirmation required"
         token = ride_error.slice(:higher_fare_confirmation_token)
