@@ -58,10 +58,10 @@ class RideSchedulerWorker
 
       if estimate_responses.present?
         # notify to user if any higher is active
-        if !params[:higher_fare_confirmation] && !params[:higher_fare_confirmation_notified] && higher_fare_applied?(estimate_responses)
-          params[:higher_fare_confirmation_notified] = true
-          notify_higher_fare_confirmation params
-        end
+        # if !params[:higher_fare_confirmation] && !params[:higher_fare_confirmation_notified] && higher_fare_applied?(estimate_responses)
+        #   params[:higher_fare_confirmation_notified] = true
+        #   notify_higher_fare_confirmation params
+        # end
 
         sort_by = params[:sort_by] || 'cheapest'
         car_types = Array(params[:car_types]) | Array(sanitized_estimate_params[:car_types])
