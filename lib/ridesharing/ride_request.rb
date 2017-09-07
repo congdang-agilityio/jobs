@@ -1,3 +1,4 @@
+require 'bunny-rpc'
 module Ridesharing
   class RideRequest < BunnyRpc
     private
